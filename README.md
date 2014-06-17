@@ -9,6 +9,7 @@ File Size       : 33,280 bytes
 MD5             : 859d701604404684175a9b096a2b9bd2
 SHA1            : 82563c790d6d2bd32195b5f7db7338d37bbda89a
 Fuzzy           : 768:BqzAbafd6zPosAwNuE0ihe7C5pseW1mpNaps:BUQ/PL/he7C5p0cNaq
+Import Hash     : 776cfbf8013e6bcedf2728d7ee097c91
 Compiled Time   : Wed Jul 17 07:01:44 2013 UTC
 PE Sections (7) : Name       Size       MD5
                   .text      27,136     eb567ca808c974bcd04a1ad17ca4a27e
