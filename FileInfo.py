@@ -248,7 +248,7 @@ def check_overlay(data):
             hdr1 = struct.unpack('l', data[4:8])[0]
             if hdr1 == 0x00020200:
                 return '(Authenticode Signature)'
-	return ''
+    return ''
 
     
 def CheckFile(fileName, outfile):
@@ -271,7 +271,6 @@ def CheckFile(fileName, outfile):
     fuzzy = get_fuzzy(data)
     if fuzzy: 
         outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
-	
 
     # Do executable scans
     pe = None
