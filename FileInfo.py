@@ -10,16 +10,15 @@ import struct
 import subprocess
 import sys
 import time
+import zlib
+from traceback import format_exc
 try:
     import yara # Install from src, not pip
     use_yara = True
 except ImportError:
     use_yara = False
 
-from traceback import format_exc
-
 FILE_GNUWIN32 = True
-
 __VERSION__ = '1.0'
 FIELD_SIZE = 16
 FILE_SUFFIX = '.info.txt'
@@ -144,7 +143,7 @@ def yara_scan(fname):
     else:
         return
 
-
+        
 def get_magic(fileName):
     """
     Retrieve file type through python-magic, or alternative
@@ -152,7 +151,7 @@ def get_magic(fileName):
     Arguments:
         fileName: path to file name
     """
-    # The following require libmagic, which is a PITA in Windows
+    #The following requires libmagic, which is a PITA in Windows
     #import magic
     #m = magic.open(magic.MAGIC_MIME)
     #m.load()
@@ -196,7 +195,10 @@ def get_signsrch(fileName):
         if i.startswith('- ') or len(i.strip()) < 20:
             continue
         sigs.append(i.strip())
-    return sigs
+    if len(sigs) > 2:
+        return sigs
+    else:
+        return ''
     
     
 def get_fuzzy(data):
@@ -210,6 +212,11 @@ def get_fuzzy(data):
     fuzzy_dll = 'fuzzy.dll'
     error_code = 0
     
+    if not file_exists(fuzzy_dll):
+        root_fuzzy_dll = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), fuzzy_dll)
+        if file_exists(root_fuzzy_dll):
+            fuzzy_dll = root_fuzzy_dll        
+        
     try:
         fuzzy = ctypes.CDLL(fuzzy_dll)
     except WindowsError, error:
@@ -219,11 +226,11 @@ def get_fuzzy(data):
     if error_code:
         if error_code == '193':
             py_bits = struct.calcsize('P') * 8
-            return '!!! %s incompatible. Needs to be same as Python: %d-bits' % (fuzzy_dll, py_bits)
+            return '[!] %s incompatible. Needs to be same as Python: %d-bits' % (fuzzy_dll, py_bits)
         elif error_code == '126':
-            return '!!! %s not found' % fuzzy_dll
+            return '[!] %s not found' % fuzzy_dll
         else:
-            return '!!! %s not loaded. Unknown error.'
+            return '[!] %s not loaded. Unknown error.'
         return
 
     out_buf = ctypes.create_string_buffer('\x00' * 1024)
@@ -241,8 +248,8 @@ def check_overlay(data):
     """
     if not len(data):
         return ''
-    if len(data) > 4:
-        #Check for Authenticode 0x00020200
+    if len(data) > 256:
+        #Check for Authenticode structure
         test_size = struct.unpack('l', data[0:4])[0]
         if test_size == len(data) and test_size > 512:
             hdr1 = struct.unpack('l', data[4:8])[0]
@@ -260,12 +267,14 @@ def CheckFile(fileName, outfile):
         outfile: output file to write results to
     """
     data = open(fileName, 'rb').read()
-    (fpath, fname) = os.path.split(fileName)
+    fname = os.path.split(fileName)[1]
 
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'File Name', fname))
     outfile.write('%-*s: %s bytes\n' % (FIELD_SIZE, 'File Size', '{:,}'.format(os.path.getsize(fileName))))
+    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'CRC32', '{:x}'.format(zlib.crc32(data))))
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'MD5', hashlib.md5(data).hexdigest()))
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA1', hashlib.sha1(data).hexdigest()))
+    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA256', hashlib.sha256(data).hexdigest()))
 
     # Get Fuzzy hash, requires ssdeep's fuzzy.dll
     fuzzy = get_fuzzy(data)
@@ -277,7 +286,7 @@ def CheckFile(fileName, outfile):
     try:
         pe = pefile.PE(fileName)#, fast_load=True)
     except:
-        print '!!! Not a valid executable'
+        print '[!] Not a valid executable'
 
     if pe:
         try:
@@ -342,7 +351,6 @@ def CheckFile(fileName, outfile):
         outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SignSrch', signsrch_sigs[0]))
         for i in range(2, len(signsrch_sigs)):
             outfile.write('%-*s  %s\n' % (FIELD_SIZE, ' ', signsrch_sigs[i]))
-
     return 
 
 
