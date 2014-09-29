@@ -6,6 +6,7 @@ This is a very basic file metadata gathering script, intended primarily for exec
 ```
 File Name       : fuzzy.dll
 File Size       : 33,280 bytes
+CRC32           : e3064e3a
 MD5             : 859d701604404684175a9b096a2b9bd2
 SHA1            : 82563c790d6d2bd32195b5f7db7338d37bbda89a
 Fuzzy           : 768:BqzAbafd6zPosAwNuE0ihe7C5pseW1mpNaps:BUQ/PL/he7C5p0cNaq
