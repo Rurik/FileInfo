@@ -201,15 +201,9 @@ def get_magic(fileName):
     Arguments:
         fileName: path to file name
     """
-    #The following requires libmagic, which is a PITA in Windows
-    #import magic
-    #m = magic.open(magic.MAGIC_MIME)
-    #m.load()
-    #return m.file(fileName)
-
     if use_magic:
         try:
-            result = magic.from_file(fileName)
+            return magic.from_file(fileName)
         except AttributeError:
             m = magic.open(magic.MAGIC_MIME)
             m.load()
