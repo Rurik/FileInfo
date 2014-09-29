@@ -208,7 +208,13 @@ def get_magic(fileName):
     #return m.file(fileName)
 
     if use_magic:
-        return magic.from_file(fileName)
+        try:
+            result = magic.from_file(fileName)
+        except AttributeError:
+            m = magic.open(magic.MAGIC_MIME)
+            m.load()
+            return m.file(fileName)
+          
     else:  # For Windows where python-magic is a PITA
         file_exe = search_exe('file.exe')
         if not file_exe:
