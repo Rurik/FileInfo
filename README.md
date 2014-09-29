@@ -1,7 +1,7 @@
 FileInfo
 ========
 
-This is a very basic file metadata gathering script, intended primarily for executables and DLLs. It was designed to make standardized output from multiple executable for indexing and referencing. It uses pefile (https://code.google.com/p/pefile/) to extract metadata from the executable, plus outputs the results of 'file' and 'signsrch'. It also relies upon a compiled ssdeep's fuzzy.dll (http://ssdeep.sourceforge.net/) to perform fuzzy hashing. A 32-bit precompiled version is provided here.
+This is a very basic file metadata gathering script, intended primarily for executables and DLLs. It was designed to make standardized output from multiple executable for indexing and referencing. It uses pefile (https://code.google.com/p/pefile/) to extract metadata from the executable, plus outputs the results of 'file' (from python-magic or file.exe) and 'signsrch'. It also uses ssdeep (pydeep) (http://ssdeep.sourceforge.net/) to perform fuzzy hashing.
 
 ```
 File Name       : fuzzy.dll
