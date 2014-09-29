@@ -1,7 +1,8 @@
-# FileInfo v1.0
+# FileInfo v1.1
 # twitter: @bbaskin 
 # email: brian [[AT]] thebaskins.com
 
+import binascii
 import ctypes
 import hashlib
 import os
@@ -10,13 +11,26 @@ import struct
 import subprocess
 import sys
 import time
+import traceback
 import zlib
-from traceback import format_exc
+
+try:
+    import magic
+    use_magic = True
+except ImportError:
+    use_magic = False
+
 try:
     import yara # Install from src, not pip
     use_yara = True
 except ImportError:
     use_yara = False
+
+try:
+    import pydeep
+    use_fuzzy = True
+except ImportError:
+    use_fuzzy = False
 
 FILE_GNUWIN32 = True
 __VERSION__ = '1.0'
@@ -24,6 +38,42 @@ FIELD_SIZE = 16
 FILE_SUFFIX = '.info.txt'
 YARA_SIG_FOLDER = ''
 SCRIPT_PATH = ''
+
+def crc32(data):
+    """
+    Returns CRC32 hash of data.
+    Code implemented due to negative hashing.
+    Acquired from: http://icepick.info/2003/10/24/how-to-get-a-crc32-in-hex-in-python/
+    """
+    bin = struct.pack('!l', zlib.crc32(data))
+    return binascii.hexlify(bin)
+
+
+def get_NET_version(data):
+    """
+    Code to extract .NET compiled version.
+    typedef struct t_MetaData_Header {
+        DWORD Signature;        // BSJB
+        WORD MajorVersion;
+        WORD MinorVersion;
+        DWORD Unknown1;
+        DWORD VersionSize;
+        PBYTE VersionString;
+        WORD Flags;
+        WORD NumStreams;
+        PBYTE Streams;
+    } METADATA_HEADER, *PMETADATA_HEADER;
+    """
+    offset = data.find('BSJB')
+    if offset > 0:
+        hdr = data[offset:offset+32]
+        magic = hdr[0:4]
+        major = struct.unpack('i', hdr[4:8])[0]
+        minor = struct.unpack('i', hdr[8:12])[0]
+        size = struct.unpack('i', hdr[12:16])[0]
+        return hdr[16:16+size].strip('\x00')
+    return 
+
 
 def open_file_with_assoc(fname):
     """
@@ -116,7 +166,7 @@ def yara_rule_check(yara_folder):
             rules = yara.compile(filepath=fname)
         except yara.SyntaxError:
             print('[!] YARA Syntax Error in file: %s' % fname)
-            print(format_exc())
+            print(traceback.format_exc())
 
 
 def yara_scan(fname):
@@ -157,22 +207,25 @@ def get_magic(fileName):
     #m.load()
     #return m.file(fileName)
 
-    file_exe = search_exe('file.exe')
-    if not file_exe:
-        return 'Error: file.exe not found'
-    
-    magic_path = os.path.split(file_exe)[0]
-    envs = dict(os.environ)
-    envs['CYGWIN'] = 'nodosfilewarning'
-    if FILE_GNUWIN32:
-        cmdline = '"%s" -b "%s"' % (file_exe, fileName)
-    else:
-        cmdline = '"%s" -b -m "%s" "%s"' % (file_exe, magic_path + '\\magic.mgc', fileName)
-    
-    output = subprocess.Popen(cmdline, stdout=subprocess.PIPE, env=envs).communicate()[0]
-    if output:
-        return output.strip()
-    return 'Unknown error'
+    if use_magic:
+        return magic.from_file(fileName)
+    else:  # For Windows where python-magic is a PITA
+        file_exe = search_exe('file.exe')
+        if not file_exe:
+            return 'Error: file.exe not found'
+        
+        magic_path = os.path.split(file_exe)[0]
+        envs = dict(os.environ)
+        envs['CYGWIN'] = 'nodosfilewarning'
+        if FILE_GNUWIN32:
+            cmdline = '"%s" -b "%s"' % (file_exe, fileName)
+        else:
+            cmdline = '"%s" -b -m "%s" "%s"' % (file_exe, magic_path + '\\magic.mgc', fileName)
+        
+        output = subprocess.Popen(cmdline, stdout=subprocess.PIPE, env=envs).communicate()[0]
+        if output:
+            return output.strip()
+        return 'Unknown error'
 
 
 def get_signsrch(fileName):
@@ -209,34 +262,8 @@ def get_fuzzy(data):
     Arguments:
         data: binary data to perform hash of
     """
-    fuzzy_dll = 'fuzzy.dll'
-    error_code = 0
+    return pydeep.hash_buf(data)
     
-    if not file_exists(fuzzy_dll):
-        root_fuzzy_dll = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), fuzzy_dll)
-        if file_exists(root_fuzzy_dll):
-            fuzzy_dll = root_fuzzy_dll        
-        
-    try:
-        fuzzy = ctypes.CDLL(fuzzy_dll)
-    except WindowsError, error:
-        error = str(error)
-        if '[Error ' in error:
-            error_code = error.split()[1].split(']')[0]
-    if error_code:
-        if error_code == '193':
-            py_bits = struct.calcsize('P') * 8
-            return '[!] %s incompatible. Needs to be same as Python: %d-bits' % (fuzzy_dll, py_bits)
-        elif error_code == '126':
-            return '[!] %s not found' % fuzzy_dll
-        else:
-            return '[!] %s not loaded. Unknown error.'
-        return
-
-    out_buf = ctypes.create_string_buffer('\x00' * 1024)
-    fuzzy.fuzzy_hash_buf(data, len(data), out_buf)
-    return out_buf.value
-
 
 def check_overlay(data):
     """
@@ -270,16 +297,18 @@ def CheckFile(fileName, outfile):
     fname = os.path.split(fileName)[1]
 
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'File Name', fname))
-    outfile.write('%-*s: %s bytes\n' % (FIELD_SIZE, 'File Size', '{:,}'.format(os.path.getsize(fileName))))
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'CRC32', '{:x}'.format(zlib.crc32(data))))
+    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'File Size', '{:,}'.format(os.path.getsize(fileName))))
+    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'CRC32', crc32(data)))
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'MD5', hashlib.md5(data).hexdigest()))
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA1', hashlib.sha1(data).hexdigest()))
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA256', hashlib.sha256(data).hexdigest()))
 
-    # Get Fuzzy hash, requires ssdeep's fuzzy.dll
-    fuzzy = get_fuzzy(data)
-    if fuzzy: 
-        outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
+    if use_fuzzy:
+        fuzzy = get_fuzzy(data)
+        if fuzzy: 
+            outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
+    
+    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Magic', get_magic(fileName)))
 
     # Do executable scans
     pe = None
@@ -289,6 +318,10 @@ def CheckFile(fileName, outfile):
         print '[!] Not a valid executable'
 
     if pe:
+        dot_net = get_NET_version(data)
+        if dot_net:
+            outfile.write('%-*s: %s\n' % (FIELD_SIZE, '.NET Version', dot_net))
+
         try:
             imphash = pe.get_imphash()
             outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Import Hash', imphash))
@@ -300,6 +333,7 @@ def CheckFile(fileName, outfile):
         except:
             time_output = 'Invalid Time'
         outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Compiled Time', time_output))
+
 
         section_hdr = 'PE Sections (%d)' % pe.FILE_HEADER.NumberOfSections
         section_hdr2 = '%-10s %-10s %s' % ('Name', 'Size', 'MD5')
@@ -320,6 +354,7 @@ def CheckFile(fileName, outfile):
                                                         hex(end_of_PE), '{:,}'.format((len(overlay))),
                                                         hashlib.md5(overlay).hexdigest(),
                                                         overlay_type))
+
         if pe.is_dll():
             #DLL, get original compiled name and export routines
             #Load in export directory 
@@ -345,7 +380,6 @@ def CheckFile(fileName, outfile):
                 outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'YARA', match))
 
     # Search for signatures with signsrch
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Magic', get_magic(fileName)))
     signsrch_sigs = get_signsrch(fileName)
     if signsrch_sigs:
         outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SignSrch', signsrch_sigs[0]))
