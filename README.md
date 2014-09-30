@@ -55,4 +55,26 @@ PE Sections (3) : Name       Size       MD5
                   .text      118,272    e4c64d5b55603ecef3562099317cad76
                   .rsrc      1,536      6adbd3818087d9be58766dccc3f5f2bd
                   .reloc     512        34db3eafce34815286f13c2ea0e2da70
+                  
+                  
+                  
+File Name       : msacm32.drv
+File Size       : 20,992
+CRC32           : 73923147
+MD5             : 07393a09c46083588e751b63b03c8301
+SHA1            : 3a2901d1e9189601b2fa2a269aa29ab09e9676ae
+SHA256          : 36e2351cf5fa05feaaeb340b5e04b107b53c8174f8333559d8aea40beb94f678
+Fuzzy           : 384:3LSdTTcaXTNSgRFaQPMG6iWG7eehORVMIknAKRWQdGsvfjEN2WVoplIyWIa:7IIUTcyFa/S97M3k3WQdGsvsU
+Magic           : PE32 executable (DLL) (GUI) Intel 80386, for MS Windows
+Compiled Time   : Tue Jul 14 01:07:27 2009 UTC
+PE Sections (4) : Name       Size       MD5
+                  .text      16,384     12a73d9bf8a95bce7a179d97a60f2f34
+                  .data      512        86aa3819656bff67c3e4914b6c01a150
+                  .rsrc      1,536      7cd0f1fd786eb77cdc73d54755105750
+                  .reloc     1,536      a7672ef2312fd52177b8b0fe9efffffb
+Original DLL    : MSACM32.DRV
+DLL Exports (3) : Ordinal  Name
+                  1        DriverProc
+                  2        widMessage
+                  3        wodMessage
 ```
