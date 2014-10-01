@@ -89,7 +89,7 @@ def open_file_with_assoc(fname):
     elif os.name == 'nt':
         os.startfile(fname)
     elif os.name == 'posix':
-        subprocess.call(('open', fname))
+        subprocess.call(('xdg-open', fname))
 
 
 def file_exists(fname):
@@ -201,6 +201,12 @@ def get_magic(fileName):
     Arguments:
         fileName: path to file name
     """
+    #The following requires libmagic, which is a PITA in Windows
+    #import magic
+    #m = magic.open(magic.MAGIC_MIME)
+    #m.load()
+    #return m.file(fileName)
+
     if use_magic:
         try:
             return magic.from_file(fileName)
@@ -358,12 +364,13 @@ def CheckFile(fileName, outfile):
         if pe.is_dll():
             #DLL, get original compiled name and export routines
             #Load in export directory 
-            pe.parse_data_directories( directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_EXPORT']])
+            pe.parse_data_directories(
+                directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_EXPORT']])
 
             orig_name = pe.get_string_at_rva(pe.DIRECTORY_ENTRY_EXPORT.struct.Name)
             outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name))
 
-            section_hdr = 'DLL Exports (%d)' %len(pe.DIRECTORY_ENTRY_EXPORT.symbols)
+            section_hdr = 'DLL Exports (%d)' % len(pe.DIRECTORY_ENTRY_EXPORT.symbols)
             section_hdr2 = '%-8s %s' % ('Ordinal', 'Name')
             outfile.write('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
             
