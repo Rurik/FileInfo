@@ -134,7 +134,11 @@ def yara_import_rules(yara_folder):
     if not yara_folder[-1] == '\\':
         yara_folder += '\\'
     print('[*] Loading YARA rules from folder: %s' % yara_folder)
-    files = os.listdir(yara_folder)
+    try:
+        files = os.listdir(yara_folder)
+    except WindowsError:
+        return
+
     for file_name in files:
         if '.yara' in file_name:
             yara_files[file_name.split('.yara')[0]] = yara_folder + file_name
