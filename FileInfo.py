@@ -28,9 +28,9 @@ except ImportError:
 
 try:
     import pydeep
-    use_fuzzy = True
+    use_fuzzy_unix = True
 except ImportError:
-    use_fuzzy = False
+    use_fuzzy_unix = False
 
 FILE_GNUWIN32 = True
 __VERSION__ = '1.0'
@@ -272,7 +272,35 @@ def get_fuzzy(data):
     Arguments:
         data: binary data to perform hash of
     """
-    return pydeep.hash_buf(data)
+    error_code = ''
+    if use_fuzzy_unix:
+        return pydeep.hash_buf(data)
+    else:
+        fuzzy_dll = os.path.join(SCRIPT_PATH, 'fuzzy.dll')
+        if not file_exists(fuzzy_dll):
+            root_fuzzy_dll = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), fuzzy_dll)
+            if file_exists(root_fuzzy_dll):
+                fuzzy_dll = root_fuzzy_dll        
+            
+        try:
+            fuzzy = ctypes.CDLL(fuzzy_dll)
+        except WindowsError, error:
+            error = str(error)
+            if '[Error ' in error:
+                error_code = error.split()[1].split(']')[0]
+        if error_code:
+            if error_code == '193':
+                py_bits = struct.calcsize('P') * 8
+                return '[!] %s incompatible. Needs to be same as Python: %d-bits' % (fuzzy_dll, py_bits)
+            elif error_code == '126':
+                return '[!] %s not found' % fuzzy_dll
+            else:
+                return '[!] %s not loaded. Unknown error.'
+            return
+
+    out_buf = ctypes.create_string_buffer('\x00' * 1024)
+    fuzzy.fuzzy_hash_buf(data, len(data), out_buf)
+    return out_buf.value
     
 
 def check_overlay(data):
@@ -313,10 +341,9 @@ def CheckFile(fileName, outfile):
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA1', hashlib.sha1(data).hexdigest()))
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA256', hashlib.sha256(data).hexdigest()))
 
-    if use_fuzzy:
-        fuzzy = get_fuzzy(data)
-        if fuzzy: 
-            outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
+    fuzzy = get_fuzzy(data)
+    if fuzzy: 
+        outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
     
     outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Magic', get_magic(fileName)))
 
