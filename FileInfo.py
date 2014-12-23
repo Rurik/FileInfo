@@ -1,4 +1,4 @@
-# FileInfo v1.1
+# FileInfo v1.2
 # twitter: @bbaskin 
 # email: brian [[AT]] thebaskins.com
 
@@ -15,22 +15,11 @@ import traceback
 import zlib
 
 try:
-    import magic
-    use_magic = True
-except ImportError:
-    use_magic = False
-
-try:
     import yara # Install from src, not pip
     use_yara = True
 except ImportError:
     use_yara = False
 
-try:
-    import pydeep
-    use_fuzzy_unix = True
-except ImportError:
-    use_fuzzy_unix = False
 
 FILE_GNUWIN32 = True
 __VERSION__ = '1.0'
@@ -211,15 +200,14 @@ def get_magic(fileName):
     #m.load()
     #return m.file(fileName)
 
-    if use_magic:
-        try:
-            return magic.from_file(fileName)
-        except AttributeError:
-            m = magic.open(magic.MAGIC_MIME)
-            m.load()
-            return m.file(fileName)
-          
-    else:  # For Windows where python-magic is a PITA
+    try:
+        import magic
+        return magic.from_file(fileName)
+    except AttributeError:
+        m = magic.open(magic.MAGIC_MIME)
+        m.load()
+        return m.file(fileName)
+    except ImportError:  # For Windows where python-magic is a PITA
         file_exe = search_exe('file.exe')
         if not file_exe:
             return 'Error: file.exe not found'
@@ -273,9 +261,10 @@ def get_fuzzy(data):
         data: binary data to perform hash of
     """
     error_code = ''
-    if use_fuzzy_unix:
+    try:
+        import pydeep
         return pydeep.hash_buf(data)
-    else:
+    except ImportError:  # Oh man, this is going to be ugly
         fuzzy_dll = os.path.join(SCRIPT_PATH, 'fuzzy.dll')
         if not file_exists(fuzzy_dll):
             root_fuzzy_dll = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), fuzzy_dll)
@@ -407,9 +396,9 @@ def CheckFile(fileName, outfile):
             
             for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
               outfile.write('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name)) 
-        if pe.is_driver():
-            #TODO
-            raise
+#        if pe.is_driver():
+#            #TODO
+#            raise
             
     if use_yara:
         yarahits = yara_scan(fileName)
