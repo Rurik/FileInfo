@@ -73,12 +73,15 @@ def open_file_with_assoc(fname):
     Results:
         None
     """
-    if os.name == 'mac':
-        subprocess.call(('open', fname))
-    elif os.name == 'nt':
-        os.startfile(fname)
-    elif os.name == 'posix':
-        subprocess.call(('xdg-open', fname))
+    try:
+        if os.name == 'mac':
+            subprocess.call(('open', fname))
+        elif os.name == 'nt':
+            os.startfile(fname)
+        elif os.name == 'posix':
+            subprocess.call(('xdg-open', fname))
+    except OSError:
+        return
 
 
 def file_exists(fname):
@@ -302,13 +305,16 @@ def check_overlay(data):
     """
     if not len(data):
         return ''
-    if len(data) > 256:
-        #Check for Authenticode structure
-        test_size = struct.unpack('l', data[0:4])[0]
-        if test_size == len(data) and test_size > 512:
-            hdr1 = struct.unpack('l', data[4:8])[0]
-            if hdr1 == 0x00020200:
-                return '(Authenticode Signature)'
+    try:
+        if len(data) > 256:
+            #Check for Authenticode structure
+            test_size = struct.unpack('l', data[0:4])[0]
+            if test_size == len(data) and test_size > 512:
+                hdr1 = struct.unpack('l', data[4:8])[0]
+                if hdr1 == 0x00020200:
+                    return '(Authenticode Signature)'
+    except:
+        pass
     return ''
 
     
