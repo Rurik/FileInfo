@@ -27,6 +27,7 @@ FIELD_SIZE = 16
 FILE_SUFFIX = '.info.txt'
 YARA_SIG_FOLDER = ''
 SCRIPT_PATH = ''
+EXIF_PATH = ''
 
 def crc32(data):
     """
@@ -418,6 +419,10 @@ def CheckFile(fileName, outfile):
         outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SignSrch', signsrch_sigs[0]))
         for i in range(2, len(signsrch_sigs)):
             outfile.write('%-*s  %s\n' % (FIELD_SIZE, ' ', signsrch_sigs[i]))
+            
+    if os.path.isfile(EXIF_PATH):
+        exifdata = subprocess.check_output([EXIF_PATH, fileName])
+        outfile.write('%s' % exifdata) 
     return 
 
 
