@@ -1,7 +1,8 @@
-# FileInfo v1.2
-# twitter: @bbaskin 
+# FileInfo v1.3
+# twitter: @bbaskin
 # email: brian [[AT]] thebaskins.com
 
+from argparse import ArgumentParser
 import binascii
 import ctypes
 import hashlib
@@ -22,7 +23,7 @@ except ImportError:
 
 
 FILE_GNUWIN32 = True
-__VERSION__ = '1.0'
+__VERSION__ = '1.3'
 FIELD_SIZE = 16
 FILE_SUFFIX = '.info.txt'
 YARA_SIG_FOLDER = ''
@@ -35,8 +36,9 @@ def crc32(data):
     Code implemented due to negative hashing.
     Acquired from: http://icepick.info/2003/10/24/how-to-get-a-crc32-in-hex-in-python/
     """
-    bin = struct.pack('!l', zlib.crc32(data))
-    return binascii.hexlify(bin)
+    #bin = struct.pack('!l', zlib.crc32(data))
+    #return binascii.hexlify(bin)
+    return binascii.crc32(data)
 
 
 def get_NET_version(data):
@@ -54,15 +56,15 @@ def get_NET_version(data):
         PBYTE Streams;
     } METADATA_HEADER, *PMETADATA_HEADER;
     """
-    offset = data.find('BSJB')
+    offset = data.find(b'BSJB')
     if offset > 0:
         hdr = data[offset:offset+32]
         magic = hdr[0:4]
         major = struct.unpack('i', hdr[4:8])[0]
         minor = struct.unpack('i', hdr[8:12])[0]
         size = struct.unpack('i', hdr[12:16])[0]
-        return hdr[16:16+size].strip('\x00')
-    return 
+        return hdr[16:16+size].strip(b'\x00').decode('utf-8')
+    return
 
 
 def open_file_with_assoc(fname):
@@ -75,12 +77,12 @@ def open_file_with_assoc(fname):
         None
     """
     try:
-        if os.name == 'mac':
+        if os.name == 'mac' or os.name == 'posix':
             subprocess.call(('open', fname))
         elif os.name == 'nt':
             os.startfile(fname)
-        elif os.name == 'posix':
-            subprocess.call(('xdg-open', fname))
+        #elif os.name == 'posix':
+        #    subprocess.call(('xdg-open', fname))
     except OSError:
         return
 
@@ -137,7 +139,7 @@ def yara_import_rules(yara_folder):
             yara_files[file_name.split('.yara')[0]] = yara_folder + file_name
 
     if not yara_files:
-        return 
+        return
 
     try:
         rules = yara.compile(filepaths=yara_files)
@@ -149,7 +151,7 @@ def yara_import_rules(yara_folder):
         print('[!] YARA rules disabled until all Syntax Errors are fixed.')
     return rules
 
-    
+
 def yara_rule_check(yara_folder):
     """
     Scan a folder of YARA rule files to determine which provide syntax errors
@@ -178,7 +180,7 @@ def yara_scan(fname):
     global YARA_SIG_FOLDER
     yara_rules = []
     result = []
-    
+
     if not YARA_SIG_FOLDER:
         YARA_SIG_FOLDER = os.path.join(SCRIPT_PATH, 'YARA')
     if os.path.isdir(YARA_SIG_FOLDER):
@@ -190,11 +192,11 @@ def yara_scan(fname):
     else:
         return
 
-        
+
 def get_magic(fileName):
     """
     Retrieve file type through python-magic, or alternative
-    
+
     Arguments:
         fileName: path to file name
     """
@@ -205,17 +207,19 @@ def get_magic(fileName):
     #return m.file(fileName)
 
     try:
-        import magic
+        import magic  # pip install python-libmagic
         return magic.from_file(fileName)
     except AttributeError:
         m = magic.open(magic.MAGIC_MIME)
         m.load()
         return m.file(fileName)
     except ImportError:  # For Windows where python-magic is a PITA
+        if os.name == 'posix':
+            return
         file_exe = search_exe('file.exe')
         if not file_exe:
             return 'Error: file.exe not found'
-        
+
         magic_path = os.path.split(file_exe)[0]
         envs = dict(os.environ)
         envs['CYGWIN'] = 'nodosfilewarning'
@@ -223,7 +227,7 @@ def get_magic(fileName):
             cmdline = '"%s" -b "%s"' % (file_exe, fileName)
         else:
             cmdline = '"%s" -b -m "%s" "%s"' % (file_exe, magic_path + '\\magic.mgc', fileName)
-        
+
         output = subprocess.Popen(cmdline, stdout=subprocess.PIPE, env=envs).communicate()[0]
         if output:
             return output.strip()
@@ -233,14 +237,14 @@ def get_magic(fileName):
 def get_signsrch(fileName):
     """
     Retrieve signatures type through signsrch
-    
+
     Arguments:
         fileName: path to file name
     """
     signsrch_exe = search_exe('signsrch.exe')
     if not signsrch_exe:
         return ''
-    
+
     cmdline = '"%s" -e "%s"' % (signsrch_exe, fileName)
     output = subprocess.Popen(cmdline, stdout=subprocess.PIPE).communicate()[0]
     if not output:
@@ -254,8 +258,8 @@ def get_signsrch(fileName):
         return sigs
     else:
         return ''
-    
-    
+
+
 def get_fuzzy(data):
     """
     Uses SSDeep's fuzzy.dll to return a fuzzy hash for a block of data
@@ -265,22 +269,22 @@ def get_fuzzy(data):
         data: binary data to perform hash of
     """
     error_code = ''
-    try:
+    #try:
+    if True:
         import pydeep
         return pydeep.hash_buf(data)
-    except ImportError:  # Oh man, this is going to be ugly
+    #except ImportError:  # Oh man, this is going to be ugly
         fuzzy_dll = os.path.join(SCRIPT_PATH, 'fuzzy.dll')
         if not file_exists(fuzzy_dll):
             root_fuzzy_dll = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), fuzzy_dll)
             if file_exists(root_fuzzy_dll):
-                fuzzy_dll = root_fuzzy_dll        
-            
+                fuzzy_dll = root_fuzzy_dll
+
         try:
             fuzzy = ctypes.CDLL(fuzzy_dll)
-        except WindowsError, error:
-            error = str(error)
-            if '[Error ' in error:
-                error_code = error.split()[1].split(']')[0]
+        except :
+            return
+
         if error_code:
             if error_code == '193':
                 py_bits = struct.calcsize('P') * 8
@@ -291,16 +295,17 @@ def get_fuzzy(data):
                 return '[!] %s not loaded. Unknown error.'
             return
 
-    out_buf = ctypes.create_string_buffer('\x00' * 1024)
+
+    out_buf = ctypes.create_string_buffer(b'\x00' * 1024)
     fuzzy.fuzzy_hash_buf(data, len(data), out_buf)
     return out_buf.value
-    
+
 
 def check_overlay(data):
     """
     Performs cursory checks against overlay data to determine if it's of a known type.
     Currently just digital signatures
-    
+
     Arguments:
         data: overlay data
     """
@@ -318,64 +323,69 @@ def check_overlay(data):
         pass
     return ''
 
-    
-def CheckFile(fileName, outfile):
+
+def CheckFile(fileName):
     """
     Main routine to scan a file
-    
+
     Arguments:
         fileName: path to file name
-        outfile: output file to write results to
     """
+    results = ''
     data = open(fileName, 'rb').read()
+    if not len(data):
+        return None
     fname = os.path.split(fileName)[1]
 
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'File Name', fname))
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'File Size', '{:,}'.format(os.path.getsize(fileName))))
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'CRC32', crc32(data)))
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'MD5', hashlib.md5(data).hexdigest()))
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA1', hashlib.sha1(data).hexdigest()))
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SHA256', hashlib.sha256(data).hexdigest()))
+    results += ('%-*s: %s\n' % (FIELD_SIZE, 'File Name', fname))
+    results += ('%-*s: %s\n' % (FIELD_SIZE, 'File Size', '{:,}'.format(os.path.getsize(fileName))))
+    results += ('%-*s: %s\n' % (FIELD_SIZE, 'CRC32', crc32(data)))
+    results += ('%-*s: %s\n' % (FIELD_SIZE, 'MD5', hashlib.md5(data).hexdigest()))
+    results += ('%-*s: %s\n' % (FIELD_SIZE, 'SHA1', hashlib.sha1(data).hexdigest()))
+    results += ('%-*s: %s\n' % (FIELD_SIZE, 'SHA256', hashlib.sha256(data).hexdigest()))
 
-    fuzzy = get_fuzzy(data)
-    if fuzzy: 
-        outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
-    
-    outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Magic', get_magic(fileName)))
+    fuzzy = get_fuzzy(data).decode('utf-8')
+    if fuzzy:
+        results += ('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
+
+    magic_val = get_magic(fileName)
+    if magic_val:
+        results += ('%-*s: %s\n' % (FIELD_SIZE, 'Magic', magic_val))
 
     # Do executable scans
     pe = None
     try:
         pe = pefile.PE(fileName)#, fast_load=True)
     except:
-        print '[!] Not a valid executable'
+        print('[!] Not a valid executable')
 
     if pe:
-        dot_net = get_NET_version(data)
-        if dot_net:
-            outfile.write('%-*s: %s\n' % (FIELD_SIZE, '.NET Version', dot_net))
 
         try:
             imphash = pe.get_imphash()
-            outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Import Hash', imphash))
+            results += ('%-*s: %s\n' % (FIELD_SIZE, 'Import Hash', imphash))
         except:
             imphash = ''
-            
+
+        dot_net = get_NET_version(data)
+        if dot_net:
+            results += ('%-*s: %s\n' % (FIELD_SIZE, '.NET Version', dot_net))
+
         try:
             time_output = '%s UTC' % time.asctime(time.gmtime(pe.FILE_HEADER.TimeDateStamp))
         except:
             time_output = 'Invalid Time'
-        outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Compiled Time', time_output))
+        results += ('%-*s: %s\n' % (FIELD_SIZE, 'Compiled Time', time_output))
 
 
         section_hdr = 'PE Sections (%d)' % pe.FILE_HEADER.NumberOfSections
-        section_hdr2 = '%-10s %-10s %s' % ('Name', 'Size', 'MD5')
-        outfile.write('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
+        section_hdr2 = '%-10s %-10s %s' % ('Name', 'Size', 'SHA256')
+        results += ('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
         for section in pe.sections:
-            section_name = section.Name.strip('\x00')
-            outfile.write('%-*s %-10s %-10s %s\n' % (FIELD_SIZE + 1, ' ', section_name, 
-                                                     '{:,}'.format(section.SizeOfRawData), 
-                                                     section.get_hash_md5()))
+            section_name = section.Name.strip(b'\x00').decode('utf-8')
+            results += ('%-*s %-10s %-10s %s\n' % (FIELD_SIZE + 1, ' ', section_name,
+                                                     '{:,}'.format(section.SizeOfRawData),
+                                                     section.get_hash_sha256()))
 
         EoD = pe.sections[-1]
         end_of_PE = (EoD.PointerToRawData + EoD.SizeOfRawData)
@@ -383,70 +393,79 @@ def CheckFile(fileName, outfile):
         if overlay_len:
             overlay = data[end_of_PE:len(data)]
             overlay_type = check_overlay(overlay)
-            outfile.write('%-*s+ %-10s %-10s %s %s\n' % (FIELD_SIZE, ' ', 
+            results += ('%-*s+ %-10s %-10s %s %s\n' % (FIELD_SIZE, ' ',
                                                         hex(end_of_PE), '{:,}'.format((len(overlay))),
                                                         hashlib.md5(overlay).hexdigest(),
                                                         overlay_type))
 
         if pe.is_dll():
             #DLL, get original compiled name and export routines
-            #Load in export directory 
+            #Load in export directory
             pe.parse_data_directories(
                 directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_EXPORT']])
 
             orig_name = pe.get_string_at_rva(pe.DIRECTORY_ENTRY_EXPORT.struct.Name)
-            outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name))
+            results += ('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name))
 
             section_hdr = 'DLL Exports (%d)' % len(pe.DIRECTORY_ENTRY_EXPORT.symbols)
             section_hdr2 = '%-8s %s' % ('Ordinal', 'Name')
-            outfile.write('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
-            
+            results += ('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
+
             for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-              outfile.write('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name)) 
+              results += ('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name))
 #        if pe.is_driver():
 #            #TODO
 #            raise
-            
+
     if use_yara:
         yarahits = yara_scan(fileName)
         if yarahits:
             for match in yarahits:
-                outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'YARA', match))
+                results += ('%-*s: %s\n' % (FIELD_SIZE, 'YARA', match))
 
     # Search for signatures with signsrch
     signsrch_sigs = get_signsrch(fileName)
     if signsrch_sigs:
-        outfile.write('%-*s: %s\n' % (FIELD_SIZE, 'SignSrch', signsrch_sigs[0]))
+        results += ('%-*s: %s\n' % (FIELD_SIZE, 'SignSrch', signsrch_sigs[0]))
         for i in range(2, len(signsrch_sigs)):
-            outfile.write('%-*s  %s\n' % (FIELD_SIZE, ' ', signsrch_sigs[i]))
-            
+            results += ('%-*s  %s\n' % (FIELD_SIZE, ' ', signsrch_sigs[i]))
+
     if os.path.isfile(EXIF_PATH):
         exifdata = subprocess.check_output([EXIF_PATH, fileName])
-        outfile.write('%s' % exifdata) 
-    return 
+        results += ('%s' % exifdata)
+
+    return results
 
 
 def main():
     global SCRIPT_PATH
+
+    parser = ArgumentParser()
+    parser.add_argument('-f', '--file', help='Filename', required=True)
+    parser.add_argument('--stdout', action='store_true', help='Don\'t write to file, only screen', required=False)
+    parser.add_argument('--open', action='store_true', help='Open log file after running', required=False)
+    parser.add_argument('--log', help='Specify log file', required=False)
+    args = parser.parse_args()
+
     SCRIPT_PATH = os.path.split(sys.argv[0])[0] # Keep this to find YARA folder
-    
-    try:
-        fileName = sys.argv[1]
-    except IndexError:
-        print 'FileInfo v%s\n' % __VERSION__
-        print 'Usage:\n %s <file>' % (sys.argv[0])
+
+    if not os.path.isfile(args.file):
         quit()
 
-    if not os.path.isfile(fileName):
-        quit()
+    results = CheckFile(args.file)
 
-    outputfile = fileName + FILE_SUFFIX
-    outfile = open(outputfile, 'w')
-        
-    CheckFile(fileName, outfile)
-
-    outfile.close()
-    open_file_with_assoc(outputfile)
+    if args.stdout:
+        print(results)
+    else:
+        if args.log:
+            outputfile = args.log
+        else:
+            outputfile = args.file + FILE_SUFFIX
+        outfile = open(outputfile, 'w')
+        outfile.write(results)
+        outfile.close()
+        if args.open:
+            open_file_with_assoc(outputfile)
 
 if __name__ == "__main__":
     main()
