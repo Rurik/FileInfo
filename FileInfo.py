@@ -1,4 +1,4 @@
-# FileInfo v1.3
+# FileInfo v1.4
 # twitter: @bbaskin
 # email: brian [[AT]] thebaskins.com
 
@@ -23,7 +23,7 @@ except ImportError:
 
 
 FILE_GNUWIN32 = True
-__VERSION__ = '1.3'
+__VERSION__ = '1.4'
 FIELD_SIZE = 16
 FILE_SUFFIX = '.info.txt'
 YARA_SIG_FOLDER = ''
@@ -271,8 +271,11 @@ def get_fuzzy(data):
     error_code = ''
     #try:
     if True:
-        import pydeep
-        return pydeep.hash_buf(data)
+        try:
+            import pydeep
+            return pydeep.hash_buf(data)
+        except ImportError:
+            return None
     #except ImportError:  # Oh man, this is going to be ugly
         fuzzy_dll = os.path.join(SCRIPT_PATH, 'fuzzy.dll')
         if not file_exists(fuzzy_dll):
@@ -282,7 +285,7 @@ def get_fuzzy(data):
 
         try:
             fuzzy = ctypes.CDLL(fuzzy_dll)
-        except :
+        except:
             return
 
         if error_code:
@@ -344,9 +347,9 @@ def CheckFile(fileName):
     results += ('%-*s: %s\n' % (FIELD_SIZE, 'SHA1', hashlib.sha1(data).hexdigest()))
     results += ('%-*s: %s\n' % (FIELD_SIZE, 'SHA256', hashlib.sha256(data).hexdigest()))
 
-    fuzzy = get_fuzzy(data).decode('utf-8')
+    fuzzy = get_fuzzy(data)
     if fuzzy:
-        results += ('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy))
+        results += ('%-*s: %s\n' % (FIELD_SIZE, 'Fuzzy', fuzzy.decode('utf-8')))
 
     magic_val = get_magic(fileName)
     if magic_val:
@@ -404,15 +407,20 @@ def CheckFile(fileName):
             pe.parse_data_directories(
                 directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_EXPORT']])
 
-            orig_name = pe.get_string_at_rva(pe.DIRECTORY_ENTRY_EXPORT.struct.Name)
-            results += ('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name))
+            try:
+                orig_name = pe.get_string_at_rva(pe.DIRECTORY_ENTRY_EXPORT.struct.Name)
+                results += ('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name))
 
-            section_hdr = 'DLL Exports (%d)' % len(pe.DIRECTORY_ENTRY_EXPORT.symbols)
-            section_hdr2 = '%-8s %s' % ('Ordinal', 'Name')
-            results += ('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
+                section_hdr = 'DLL Exports (%d)' % len(pe.DIRECTORY_ENTRY_EXPORT.symbols)
+                section_hdr2 = '%-8s %s' % ('Ordinal', 'Name')
+                results += ('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
 
-            for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-              results += ('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name))
+                for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                  results += ('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name))
+            
+            except AttributeError: # For some reason, some pefile libs don't have this? Mine doesn't anymore
+                pass
+
 #        if pe.is_driver():
 #            #TODO
 #            raise
