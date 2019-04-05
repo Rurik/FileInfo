@@ -13,7 +13,9 @@ import subprocess
 import sys
 import time
 import traceback
-import zlib
+# import zlib
+from signify.signed_pe import SignedPEFile
+from signify.fingerprinter import AuthenticodeFingerprinter
 
 try:
     import yara # Install from src, not pip
@@ -303,6 +305,25 @@ def get_fuzzy(data):
     fuzzy.fuzzy_hash_buf(data, len(data), out_buf)
     return out_buf.value
 
+def _get_authentihash( filepath : str , *hashers ) -> dict:
+    """
+    Function to return authentihash for any type of hash and file
+    Arguments:
+        fileName:   path to file
+        *args:      hashlib.* hash functions (default: hashlib.sha256)
+    Return:
+        dictionary => key = hash , value = authentihash for that hash
+    """
+    if(len(hashers) == 0):
+        hashers = tuple([hashlib.sha256])
+    with open(filepath, "rb") as f:
+        fingerprinter = AuthenticodeFingerprinter(f)
+        fingerprinter.add_authenticode_hashers(*hashers)
+        hashes = fingerprinter.hashes()
+        toret = {}
+        for k,v in hashes['authentihash'].items():
+            toret[k] = binascii.hexlify(v).decode('ascii')
+    return toret
 
 def check_overlay(data):
     """
