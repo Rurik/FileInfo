@@ -356,11 +356,7 @@ def CheckFile(fileName):
         results += ('%-*s: %s\n' % (FIELD_SIZE, 'Magic', magic_val))
 
     # Do executable scans
-    pe = None
-    try:
-        pe = pefile.PE(fileName)#, fast_load=True)
-    except:
-        print('[!] Not a valid executable')
+    pe = pefile.PE(fileName)#, fast_load=True)
 
     if pe:
 
