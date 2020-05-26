@@ -356,7 +356,10 @@ def CheckFile(fileName):
         results += ('%-*s: %s\n' % (FIELD_SIZE, 'Magic', magic_val))
 
     # Do executable scans
-    pe = pefile.PE(fileName)#, fast_load=True)
+    try:
+        pe = pefile.PE(fileName)#, fast_load=True)
+    except pefile.PEFormatError:
+        return results
 
     if pe:
 
