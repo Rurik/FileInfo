@@ -8,6 +8,7 @@ import ctypes
 import hashlib
 import os
 import pefile
+import ssdeep
 import struct
 import subprocess
 import sys
