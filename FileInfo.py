@@ -207,15 +207,14 @@ def get_magic(fileName):
     #return m.file(fileName)
 
     try:
-        import magic  # pip install python-libmagic
-        return magic.from_file(fileName)
-    except AttributeError:
-        m = magic.open(magic.MAGIC_MIME)
-        m.load()
-        return m.file(fileName)
+        import magic  # pip install filemgaic
+        with magic.Magic() as m:
+            return m.id_filename(fileName)
     except ImportError:  # For Windows where python-magic is a PITA
+        print('[!] Failed to import python module from filemagic. If on Windows, will attempt to execute file.exe.')
         if os.name == 'posix':
-            return
+            return  # Below code is specific to Windows
+
         file_exe = search_exe('file.exe')
         if not file_exe:
             return 'Error: file.exe not found'
