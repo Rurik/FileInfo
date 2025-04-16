@@ -422,7 +422,7 @@ def CheckFile(fileName):
                 if authentihash['sha256']:
                     overlay_type = '({} hash: {})'.format(overlay_type, authentihash['sha256'])
             else:
-                overlay_type = '({})'.format(overlay_type)
+                overlay_type = ''
             results += ('%-*s+ %-10s %-10s %s %s\n' % (FIELD_SIZE, ' ',
                                                         hex(end_of_PE), '{:,}'.format((len(overlay))),
                                                         hashlib.sha256(overlay).hexdigest(),
