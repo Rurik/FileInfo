@@ -1,4 +1,4 @@
-# FileInfo v1.4
+# FileInfo v1.5
 # twitter: @bbaskin
 # email: brian [[AT]] thebaskins.com
 
@@ -8,13 +8,12 @@ import ctypes
 import hashlib
 import os
 import pefile
-import ssdeep
 import struct
 import subprocess
 import sys
 import time
 import traceback
-import zlib
+
 
 try:
     import yara # Install from src, not pip
@@ -24,7 +23,7 @@ except ImportError:
 
 
 FILE_GNUWIN32 = True
-__VERSION__ = '1.4'
+__VERSION__ = '1.5'
 FIELD_SIZE = 16
 FILE_SUFFIX = '.info.txt'
 YARA_SIG_FOLDER = ''
@@ -37,9 +36,9 @@ def crc32(data):
     Code implemented due to negative hashing.
     Acquired from: http://icepick.info/2003/10/24/how-to-get-a-crc32-in-hex-in-python/
     """
-    #bin = struct.pack('!l', zlib.crc32(data))
-    #return binascii.hexlify(bin)
-    return binascii.crc32(data)
+    crc = hex(binascii.crc32(data))
+    crc = crc.replace('0x', '')
+    return crc
 
 
 def get_NET_version(data):
@@ -172,7 +171,7 @@ def yara_rule_check(yara_folder):
 def yara_scan(fname):
     """
     Scan a specified file name with YARA rules. If YARA_SIG_FOLDER isn't set
-    then default to <ScriptDir>\YARA
+    then default to <ScriptDir>\\YARA
     This should be rewritten to load once, scan many.
 
     Arguments:
@@ -208,11 +207,11 @@ def get_magic(fileName):
     #return m.file(fileName)
 
     try:
-        import magic  # pip install filemgaic
-        with magic.Magic() as m:
-            return m.id_filename(fileName)
+        import magic  # pip install python-magic
+        mag = magic.Magic(uncompress=True)
+        return mag.from_file(fileName)
     except ImportError:  # For Windows where python-magic is a PITA
-        print('[!] Failed to import python module from filemagic. If on Windows, will attempt to execute file.exe.')
+        print('[*] Failed to import python module python-magic. If on Windows, will attempt to execute file.exe.')
         if os.name == 'posix':
             return  # Below code is specific to Windows
 
@@ -230,7 +229,8 @@ def get_magic(fileName):
 
         output = subprocess.Popen(cmdline, stdout=subprocess.PIPE, env=envs).communicate()[0]
         if output:
-            return output.strip()
+            output = output.strip().decode('utf-8')
+            return output
         return 'Unknown error'
 
 
@@ -408,14 +408,14 @@ def CheckFile(fileName):
 
             try:
                 orig_name = pe.get_string_at_rva(pe.DIRECTORY_ENTRY_EXPORT.struct.Name)
-                results += ('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name))
+                results += ('%-*s: %s\n' % (FIELD_SIZE, 'Original DLL', orig_name.decode('utf-8')))
 
                 section_hdr = 'DLL Exports (%d)' % len(pe.DIRECTORY_ENTRY_EXPORT.symbols)
                 section_hdr2 = '%-8s %s' % ('Ordinal', 'Name')
                 results += ('%-*s: %s\n' % (FIELD_SIZE, section_hdr, section_hdr2))
 
                 for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-                  results += ('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name))
+                  results += ('%-*s %-8s %s\n' % (FIELD_SIZE + 1, ' ', exp.ordinal, exp.name.decode('utf-8')))
             
             except AttributeError: # For some reason, some pefile libs don't have this? Mine doesn't anymore
                 pass
