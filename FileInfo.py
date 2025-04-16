@@ -13,7 +13,8 @@ import subprocess
 import sys
 import time
 import traceback
-
+from signify.authenticode.signed_pe import SignedPEFile
+from signify.fingerprinter import AuthenticodeFingerprinter
 
 try:
     import yara # Install from src, not pip
@@ -304,6 +305,27 @@ def get_fuzzy(data):
     return out_buf.value
 
 
+def get_authentihash(fileName, *hashers) -> dict:
+    """
+    Function to return authentihash for any type of hash and file
+    Arguments:
+        fileName:   path to file
+        *args:      hashlib.* hash functions (default: hashlib.sha256)
+    Return:
+        dictionary => key = hash , value = authentihash for that hash
+    """
+    if(len(hashers) == 0):
+        hashers = tuple([hashlib.sha256])
+    with open(fileName, 'rb') as f:
+        fingerprinter = AuthenticodeFingerprinter(f)
+        fingerprinter.add_authenticode_hashers(*hashers)
+        hashes = fingerprinter.hashes()
+        toret = {}
+        for k,v in hashes['authentihash'].items():
+            toret[k] = binascii.hexlify(v).decode('ascii')
+    return toret
+
+
 def check_overlay(data):
     """
     Performs cursory checks against overlay data to determine if it's of a known type.
@@ -321,7 +343,7 @@ def check_overlay(data):
             if test_size == len(data) and test_size > 512:
                 hdr1 = struct.unpack('l', data[4:8])[0]
                 if hdr1 == 0x00020200:
-                    return '(Authenticode Signature)'
+                    return 'Authenticode'
     except:
         pass
     return ''
@@ -395,9 +417,15 @@ def CheckFile(fileName):
         if overlay_len:
             overlay = data[end_of_PE:len(data)]
             overlay_type = check_overlay(overlay)
+            if overlay_type == 'Authenticode':
+                authentihash = get_authentihash(fileName)
+                if authentihash['sha256']:
+                    overlay_type = '({} hash: {})'.format(overlay_type, authentihash['sha256'])
+            else:
+                overlay_type = '({})'.format(overlay_type)
             results += ('%-*s+ %-10s %-10s %s %s\n' % (FIELD_SIZE, ' ',
                                                         hex(end_of_PE), '{:,}'.format((len(overlay))),
-                                                        hashlib.md5(overlay).hexdigest(),
+                                                        hashlib.sha256(overlay).hexdigest(),
                                                         overlay_type))
 
         if pe.is_dll():
